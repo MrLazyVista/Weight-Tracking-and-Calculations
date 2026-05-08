@@ -188,7 +188,7 @@ if __name__ == '__main__':
     plt.xlabel('Day')
     plt.ylabel('Weight (lbs)')
     plt.title('Actual vs Predicted Weight Comparison')
-    legend = plt.legend()
+    legend = plt.legend(loc='upper right')
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
 
@@ -198,16 +198,18 @@ if __name__ == '__main__':
     rmse = np.sqrt(np.mean((np.array(actual_weights) - np.array(predicted_weights))**2))
     mae = np.mean(np.abs(np.array(actual_weights) - np.array(predicted_weights)))
 
-    # Place stats box below the legend
+    # Place stats box just below the legend in the upper-right corner
     fig = plt.gcf()
+    ax = plt.gca()
     fig.canvas.draw()
-    legend_box = legend.get_window_extent()
-    legend_box_fig = fig.transFigure.inverted().transform(legend_box)
-    stats_x = legend_box_fig[0, 0]
-    stats_y = legend_box_fig[0, 1] - 0.05
-    stats_y = max(stats_y, 0.05)
-    plt.figtext(stats_x, stats_y, f'RMSE: {rmse:.3f} lbs\nMAE: {mae:.3f} lbs\nVariance: {LowestVariance:.6f}',
-               fontsize=10, bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgray"))
+    renderer = fig.canvas.get_renderer()
+    legend_bb = legend.get_window_extent(renderer=renderer)
+    legend_bb_ax = legend_bb.transformed(ax.transAxes.inverted())
+    ax.text(legend_bb_ax.x1, legend_bb_ax.y0 - 0.01,
+            f'RMSE: {rmse:.3f} lbs\nMAE: {mae:.3f} lbs\nVariance: {LowestVariance:.6f}',
+            transform=ax.transAxes, fontsize=10,
+            verticalalignment='top', horizontalalignment='right',
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgray"))
 
     print(f"Total runtime: {time.perf_counter() - _start:.2f}s")
     plt.show()
