@@ -185,7 +185,15 @@ predicted_weights = final_true_weight[1:]
 rmse = np.sqrt(np.mean((np.array(actual_weights) - np.array(predicted_weights))**2))
 mae = np.mean(np.abs(np.array(actual_weights) - np.array(predicted_weights)))
 
-plt.figtext(0.85, 0.75, f'RMSE: {rmse:.3f} lbs\nMAE: {mae:.3f} lbs\nVariance: {LowestVariance:.6f}', 
+# Place stats box below the legend
+fig = plt.gcf()
+fig.canvas.draw()
+legend_box = legend.get_window_extent()
+legend_box_fig = fig.transFigure.inverted().transform(legend_box)
+stats_x = legend_box_fig[0, 0]
+stats_y = legend_box_fig[0, 1] - 0.05
+stats_y = max(stats_y, 0.05)
+plt.figtext(stats_x, stats_y, f'RMSE: {rmse:.3f} lbs\nMAE: {mae:.3f} lbs\nVariance: {LowestVariance:.6f}', 
            fontsize=10, bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgray"))
 
 plt.show()
