@@ -121,9 +121,9 @@ data = [
     [1927, 10500,139.2],
     [1749, 6000	,139.7]
 ]
-adj_weight_factor = np.linspace(variables[0]*0.5, variables[0]*2, 16)
-adj_base_calories = np.linspace(variables[1]*0.5, variables[1]*1.5, 101)
-adj_calories_per_step = np.linspace(variables[2]*0.5, variables[2]*2, 31)
+adj_weight_factor    = np.arange(variables[0]*0.5, variables[0]*2,   0.1)
+adj_base_calories    = np.arange(variables[1]*0.5, variables[1]*1.5, 10)
+adj_calories_per_step = np.arange(variables[2]*0.5, variables[2]*2,  0.00001)
 
 def search_weight_factor(weight_factor):
     local_variance = float('inf')
