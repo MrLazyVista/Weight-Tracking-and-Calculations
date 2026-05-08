@@ -1,5 +1,7 @@
+import time
 import numpy as np
 import matplotlib.pyplot as plt
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 # 2.2 is the weight factor (calories burned = estmated weight * weight factor)
 # 2000 is the estimate base calories burned
@@ -119,15 +121,14 @@ data = [
     [1927, 10500,139.2],
     [1749, 6000	,139.7]
 ]
-true_weight = [starting_weight]
-LowestVariance = float('inf')
-
 adj_weight_factor = np.linspace(variables[0]*0.5, variables[0]*2, 16)
 adj_base_calories = np.linspace(variables[1]*0.5, variables[1]*1.5, 101)
 adj_calories_per_step = np.linspace(variables[2]*0.5, variables[2]*2, 31)
-optimized_variables = variables.copy()
 
-for weight_factor in adj_weight_factor:
+def search_weight_factor(weight_factor):
+    local_variance = float('inf')
+    local_vars = None
+    true_weight = [starting_weight]
     for base_calories in adj_base_calories:
         for calories_per_step in adj_calories_per_step:
             adjusted_variables = [weight_factor, base_calories, calories_per_step]
@@ -137,64 +138,76 @@ for weight_factor in adj_weight_factor:
                                         - adjusted_variables[0]*data[i][2]                  # calories burned from weight
                                         - adjusted_variables[1]                             # calories burned as a base
                                         - adjusted_variables[2]*data[i][1]*data[i][2]))     # calories burned per step per bodyweight
-                true_weight.append(true_weight[len(true_weight)-1] + adjusted_calories[i]/3500)
-            std = 0
-            for i in range(len(data)):
-                std += ((data[i][2] - true_weight[i])**2) / len(data)
-            if std < LowestVariance:
-                LowestVariance = std
-                optimized_variables = adjusted_variables.copy()
+                true_weight.append(true_weight[-1] + adjusted_calories[i]/3500)
+            std = sum((data[i][2] - true_weight[i])**2 for i in range(len(data))) / len(data)
+            if std < local_variance:
+                local_variance = std
+                local_vars = adjusted_variables.copy()
             true_weight.clear()
             true_weight.append(starting_weight)
-            adjusted_calories.clear()
-    Progress = (weight_factor - adj_weight_factor[0]) / (adj_weight_factor[-1] - adj_weight_factor[0]) * 100
-    print(f"Progress: {Progress:.2f}%       ", end='\r')
+    return local_variance, local_vars
 
-print("Optimized Variables: ", [f"{v:.3g}" for v in optimized_variables])
-print("Lowest Chi-Squared: ", f"{LowestVariance:.3g}")
+if __name__ == '__main__':
+    _start = time.perf_counter()
+    LowestVariance = float('inf')
+    optimized_variables = variables.copy()
+    completed = 0
+    total = len(adj_weight_factor)
+    with ProcessPoolExecutor() as executor:
+        futures = {executor.submit(search_weight_factor, wf): wf for wf in adj_weight_factor}
+        for future in as_completed(futures):
+            variance, best_vars = future.result()
+            completed += 1
+            print(f"Progress: {completed}/{total} weight factors done       ", end='\r')
+            if variance < LowestVariance:
+                LowestVariance = variance
+                optimized_variables = best_vars
 
-# Calculate final true_weight using optimized variables
-final_true_weight = [starting_weight]
-adjusted_calories = []
+    print("Optimized Variables: ", [f"{v:.3g}" for v in optimized_variables])
+    print("Lowest Chi-Squared: ", f"{LowestVariance:.3g}")
 
-for i in range(len(data)):
-    adjusted_calories.append((data[i][0]
-                            - optimized_variables[0]*data[i][2]
-                            - optimized_variables[1]
-                            - optimized_variables[2]*data[i][1]*data[i][2]))
-    final_true_weight.append(final_true_weight[len(final_true_weight)-1] + adjusted_calories[i]/3500)
+    # Calculate final true_weight using optimized variables
+    final_true_weight = [starting_weight]
+    adjusted_calories = []
 
-# Create comparison plot
-plt.figure(figsize=(12, 6))
-days = range(1, len(data) + 1)
-predicted_weights = final_true_weight[1:]
+    for i in range(len(data)):
+        adjusted_calories.append((data[i][0]
+                                - optimized_variables[0]*data[i][2]
+                                - optimized_variables[1]
+                                - optimized_variables[2]*data[i][1]*data[i][2]))
+        final_true_weight.append(final_true_weight[-1] + adjusted_calories[i]/3500)
 
-plt.plot(days, [row[2] for row in data], 'b-', label='Actual Weight', linewidth=2, marker='o', markersize=3)
-plt.plot(days, predicted_weights, 'r--', label='Predicted Weight', linewidth=2, marker='s', markersize=3)
+    # Create comparison plot
+    plt.figure(figsize=(12, 6))
+    days = range(1, len(data) + 1)
+    predicted_weights = final_true_weight[1:]
 
-plt.xlabel('Day')
-plt.ylabel('Weight (lbs)')
-plt.title('Actual vs Predicted Weight Comparison')
-plt.legend()
-plt.grid(True, alpha=0.3)
-plt.tight_layout()
+    plt.plot(days, [row[2] for row in data], 'b-', label='Actual Weight', linewidth=2, marker='o', markersize=3)
+    plt.plot(days, predicted_weights, 'r--', label='Predicted Weight', linewidth=2, marker='s', markersize=3)
 
-# Calculate and display fit statistics
-actual_weights = [row[2] for row in data]
-predicted_weights = final_true_weight[1:]
-rmse = np.sqrt(np.mean((np.array(actual_weights) - np.array(predicted_weights))**2))
-mae = np.mean(np.abs(np.array(actual_weights) - np.array(predicted_weights)))
+    plt.xlabel('Day')
+    plt.ylabel('Weight (lbs)')
+    plt.title('Actual vs Predicted Weight Comparison')
+    legend = plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
 
-# Place stats box below the legend
-fig = plt.gcf()
-fig.canvas.draw()
-legend_box = legend.get_window_extent()
-legend_box_fig = fig.transFigure.inverted().transform(legend_box)
-stats_x = legend_box_fig[0, 0]
-stats_y = legend_box_fig[0, 1] - 0.05
-stats_y = max(stats_y, 0.05)
-plt.figtext(stats_x, stats_y, f'RMSE: {rmse:.3f} lbs\nMAE: {mae:.3f} lbs\nVariance: {LowestVariance:.6f}', 
-           fontsize=10, bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgray"))
+    # Calculate and display fit statistics
+    actual_weights = [row[2] for row in data]
+    predicted_weights = final_true_weight[1:]
+    rmse = np.sqrt(np.mean((np.array(actual_weights) - np.array(predicted_weights))**2))
+    mae = np.mean(np.abs(np.array(actual_weights) - np.array(predicted_weights)))
 
-plt.show()
-            
+    # Place stats box below the legend
+    fig = plt.gcf()
+    fig.canvas.draw()
+    legend_box = legend.get_window_extent()
+    legend_box_fig = fig.transFigure.inverted().transform(legend_box)
+    stats_x = legend_box_fig[0, 0]
+    stats_y = legend_box_fig[0, 1] - 0.05
+    stats_y = max(stats_y, 0.05)
+    plt.figtext(stats_x, stats_y, f'RMSE: {rmse:.3f} lbs\nMAE: {mae:.3f} lbs\nVariance: {LowestVariance:.6f}',
+               fontsize=10, bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgray"))
+
+    print(f"Total runtime: {time.perf_counter() - _start:.2f}s")
+    plt.show()
