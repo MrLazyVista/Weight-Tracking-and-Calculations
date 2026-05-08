@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 # 2.2 is the weight factor (calories burned = estmated weight * weight factor)
 # 2000 is the estimate base calories burned
 # 0.0002 is the estimated calories burned per step per pound of weight
-variables = [2.95,1660,0.0002]
+variables = [3,1660,0.0002]
 starting_weight = 152.25
 
 # calories consumed, steps taken, morning weight
@@ -119,12 +119,12 @@ data = [
     [1927, 10500,139.2],
     [1749, 6000	,139.7]
 ]
-true_weight = []
+true_weight = [starting_weight]
 LowestVariance = float('inf')
 
-adj_weight_factor = np.linspace(variables[0]*0.5, variables[0]*2, 20)
-adj_base_calories = np.linspace(variables[1]*0.5, variables[1]*1.5, 100)
-adj_calories_per_step = np.linspace(variables[2]*0.5, variables[2]*2, 30)
+adj_weight_factor = np.linspace(variables[0]*0.5, variables[0]*2, 16)
+adj_base_calories = np.linspace(variables[1]*0.5, variables[1]*1.5, 101)
+adj_calories_per_step = np.linspace(variables[2]*0.5, variables[2]*2, 31)
 optimized_variables = variables.copy()
 
 for weight_factor in adj_weight_factor:
@@ -137,17 +137,15 @@ for weight_factor in adj_weight_factor:
                                         - adjusted_variables[0]*data[i][2]                  # calories burned from weight
                                         - adjusted_variables[1]                             # calories burned as a base
                                         - adjusted_variables[2]*data[i][1]*data[i][2]))     # calories burned per step per bodyweight
-                if len(true_weight) == 0:
-                    true_weight.append(starting_weight + adjusted_calories[i]/3500)
-                else:
-                    true_weight.append(true_weight[len(true_weight)-1] + adjusted_calories[i]/3500)
+                true_weight.append(true_weight[len(true_weight)-1] + adjusted_calories[i]/3500)
             std = 0
-            for i in range(len(true_weight)):
-                std += ((data[i][2] - true_weight[i])**2)/len(true_weight)
+            for i in range(len(data)):
+                std += ((data[i][2] - true_weight[i])**2) / len(data)
             if std < LowestVariance:
                 LowestVariance = std
                 optimized_variables = adjusted_variables.copy()
             true_weight.clear()
+            true_weight.append(starting_weight)
             adjusted_calories.clear()
     Progress = (weight_factor - adj_weight_factor[0]) / (adj_weight_factor[-1] - adj_weight_factor[0]) * 100
     print(f"Progress: {Progress:.2f}%       ", end='\r')
@@ -156,7 +154,7 @@ print("Optimized Variables: ", [f"{v:.3g}" for v in optimized_variables])
 print("Lowest Chi-Squared: ", f"{LowestVariance:.3g}")
 
 # Calculate final true_weight using optimized variables
-final_true_weight = []
+final_true_weight = [starting_weight]
 adjusted_calories = []
 
 for i in range(len(data)):
@@ -164,17 +162,15 @@ for i in range(len(data)):
                             - optimized_variables[0]*data[i][2]
                             - optimized_variables[1]
                             - optimized_variables[2]*data[i][1]*data[i][2]))
-    if len(final_true_weight) == 0:
-        final_true_weight.append(starting_weight + adjusted_calories[i]/3500)
-    else:
-        final_true_weight.append(final_true_weight[len(final_true_weight)-1] + adjusted_calories[i]/3500)
+    final_true_weight.append(final_true_weight[len(final_true_weight)-1] + adjusted_calories[i]/3500)
 
 # Create comparison plot
 plt.figure(figsize=(12, 6))
 days = range(1, len(data) + 1)
+predicted_weights = final_true_weight[1:]
 
 plt.plot(days, [row[2] for row in data], 'b-', label='Actual Weight', linewidth=2, marker='o', markersize=3)
-plt.plot(days, final_true_weight, 'r--', label='Predicted Weight', linewidth=2, marker='s', markersize=3)
+plt.plot(days, predicted_weights, 'r--', label='Predicted Weight', linewidth=2, marker='s', markersize=3)
 
 plt.xlabel('Day')
 plt.ylabel('Weight (lbs)')
@@ -185,8 +181,9 @@ plt.tight_layout()
 
 # Calculate and display fit statistics
 actual_weights = [row[2] for row in data]
-rmse = np.sqrt(np.mean((np.array(actual_weights) - np.array(final_true_weight))**2))
-mae = np.mean(np.abs(np.array(actual_weights) - np.array(final_true_weight)))
+predicted_weights = final_true_weight[1:]
+rmse = np.sqrt(np.mean((np.array(actual_weights) - np.array(predicted_weights))**2))
+mae = np.mean(np.abs(np.array(actual_weights) - np.array(predicted_weights)))
 
 plt.figtext(0.85, 0.75, f'RMSE: {rmse:.3f} lbs\nMAE: {mae:.3f} lbs\nVariance: {LowestVariance:.6f}', 
            fontsize=10, bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgray"))
